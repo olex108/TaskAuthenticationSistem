@@ -18,9 +18,9 @@ class User(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'users'
-        verbose_name = 'Пользователь'
-        verbose_name_plural = 'Пользователи'
+        db_table = "users"
+        verbose_name = "Пользователь"
+        verbose_name_plural = "Пользователи"
 
     def __str__(self):
         return f"{self.email}|{self.is_active}"
@@ -35,9 +35,9 @@ class Role(models.Model):
     description = models.TextField(blank=True, null=True)
 
     class Meta:
-        db_table = 'roles'
-        verbose_name = 'Роль'
-        verbose_name_plural = 'Роли'
+        db_table = "roles"
+        verbose_name = "Роль"
+        verbose_name_plural = "Роли"
 
     def __str__(self):
         return self.name
@@ -52,9 +52,9 @@ class Permission(models.Model):
     description = models.TextField(blank=True, null=True)
 
     class Meta:
-        db_table = 'permissions'
-        verbose_name = 'Разрешение'
-        verbose_name_plural = 'Разрешения'
+        db_table = "permissions"
+        verbose_name = "Разрешение"
+        verbose_name_plural = "Разрешения"
 
     def __str__(self):
         return self.code
@@ -65,14 +65,15 @@ class UserRole(models.Model):
     Table M2M: bind User - Role.
     If Pole or User deleted - del record.
     """
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_roles')
-    role = models.ForeignKey(Role, on_delete=models.CASCADE, related_name='role_users')
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="user_roles")
+    role = models.ForeignKey(Role, on_delete=models.CASCADE, related_name="role_users")
 
     class Meta:
-        db_table = 'user_roles'
-        unique_together = ('user', 'role')
-        verbose_name = 'Роль пользователя'
-        verbose_name_plural = 'Роли пользователей'
+        db_table = "user_roles"
+        unique_together = ("user", "role")
+        verbose_name = "Роль пользователя"
+        verbose_name_plural = "Роли пользователей"
 
 
 class RolePermission(models.Model):
@@ -80,12 +81,12 @@ class RolePermission(models.Model):
     Table M2M: bind Role - Permission.
     """
 
-    role = models.ForeignKey(Role, on_delete=models.CASCADE, related_name='role_permissions')
-    permission = models.ForeignKey(Permission, on_delete=models.CASCADE, related_name='permission_roles')
+    role = models.ForeignKey(Role, on_delete=models.CASCADE, related_name="role_permissions")
+    permission = models.ForeignKey(Permission, on_delete=models.CASCADE, related_name="permission_roles")
 
     class Meta:
-        db_table = 'role_permissions'
+        db_table = "role_permissions"
         # Уникальный индекс, чтобы нельзя было привязать право к роли дважды
-        unique_together = ('role', 'permission')
-        verbose_name = 'Разрешение роли'
-        verbose_name_plural = 'Разрешения ролей'
+        unique_together = ("role", "permission")
+        verbose_name = "Разрешение роли"
+        verbose_name_plural = "Разрешения ролей"
