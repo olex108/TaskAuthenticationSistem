@@ -16,13 +16,15 @@ ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '127.0.0.1').split(',')
 # Application definition
 INSTALLED_APPS = [
     "django.contrib.admin",
-    "django.contrib.auth",
-    "django.contrib.contenttypes",
+    # "django.contrib.auth",
+    # "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
     # libraries
     "rest_framework",
+    # apps
+    "identity"
 ]
 
 MIDDLEWARE = [
