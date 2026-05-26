@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 import jwt
 
-from .models import User
+from .models import User, RefreshToken
 from .serializers import UserRegisterSerializer
 from .services.hasher import PasswordHasher
 from .services.jwt import JWTService
@@ -13,15 +13,16 @@ from .services.jwt import JWTService
 
 class UserRegisterAPIView(generics.CreateAPIView):
     """
-    Register a new user. Accessible by any user.
+    Register a new user. Accessible by any user
     """
+
     serializer_class = UserRegisterSerializer
     permission_classes = [AllowAny]
 
 
 class LoginView(APIView):
     """
-    API View to get tokens by valid email and password.
+    API View to get tokens by valid email and password
     """
 
     permission_classes = [AllowAny]
@@ -49,6 +50,38 @@ class LoginView(APIView):
         return Response(tokens, status=status.HTTP_200_OK)
 
 
+class LogoutAPIView(APIView):
+    """
+    Log out the user by refresh token
+    """
+
+    def post(self, request):
+        refresh_token = request.data.get('refresh_token')
+
+        if not refresh_token:
+            return Response(
+                {"error": "Refresh token is required to logout"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            # Get end update Token in db
+            token_entry = RefreshToken.objects.filter(refresh_token=refresh_token).first()
+            if token_entry:
+                token_entry.is_logout = True
+                token_entry.save()
+
+            return Response(
+                {"message": "Logged out successfully. Token invalidated"},
+                status=status.HTTP_200_OK
+            )
+        except Exception:
+            return Response(
+                {"error": "Invalid token"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+
 class TokenRefreshView(APIView):
     """
     API View to refresh the access token using a valid refresh token.
@@ -60,7 +93,10 @@ class TokenRefreshView(APIView):
         refresh_token = request.data.get("refresh_token")
 
         if not refresh_token:
-            return Response({"error": "Refresh token is required."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "Refresh token is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         try:
             # 1. Decode and validate the refresh token
@@ -73,6 +109,16 @@ class TokenRefreshView(APIView):
                 return Response(
                     {"error": "User not found or account is deactivated"}, status=status.HTTP_401_UNAUTHORIZED
                 )
+
+            # 3. Get refresh token, chek status and del token from db
+            token_entry = RefreshToken.objects.filter(refresh_token=refresh_token).first()
+            if not token_entry or token_entry.is_logout:
+                return Response(
+                    {"error": "This token has been revoked (logged out)"},
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
+            else:
+                del token_entry
 
             new_tokens = JWTService.generate_token(user)
             return Response(new_tokens, status=status.HTTP_200_OK)

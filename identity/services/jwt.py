@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 import jwt
 from django.conf import settings
-from identity.models import User
+from identity.models import User, RefreshToken
 
 
 class JWTService:
@@ -23,6 +23,19 @@ class JWTService:
             .distinct()
         )
         return [p for p in permissions if p]
+
+    @staticmethod
+    def create_refresh_token_in_db(user: User, refresh_token: str, expires_at: datetime, is_logout: bool = False) -> None:
+        """
+        Save refresh token in database
+        """
+
+        RefreshToken.objects.create(
+            user=user,
+            refresh_token=refresh_token,
+            is_logout=is_logout,
+            expires_at=expires_at
+        )
 
     @classmethod
     def generate_token(cls, user: User) -> dict:
@@ -55,6 +68,14 @@ class JWTService:
         access_token = jwt.encode(access_payload, cls.SECRET_KEY, algorithm=cls.ALGORITHM)
         refresh_token = jwt.encode(refresh_payload, cls.SECRET_KEY, algorithm=cls.ALGORITHM)
 
+        expires_datetime = datetime.fromtimestamp(refresh_payload["exp"], tz=timezone.utc)
+        JWTService.create_refresh_token_in_db(
+            user=user,
+            refresh_token=refresh_token,
+            expires_at=expires_datetime,
+            is_logout=False
+        )
+        
         return {
             "access_token": access_token,
             "refresh_token": refresh_token,
