@@ -25,6 +25,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     # libraries
     "rest_framework",
+    "drf_spectacular",
     # apps
     "identity",
     "business_mock"

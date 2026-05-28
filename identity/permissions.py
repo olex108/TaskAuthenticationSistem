@@ -24,7 +24,7 @@ class HasPermission(BasePermission):
             return False
 
         # 2. Extract permissions from Token
-        user_permissions = getattr(request.user, 'permissions', [])
+        user_permissions = getattr(request.user, "permissions", [])
 
         # 3. Grant access if the required code exists in user's token claims
         return self.required_permission in user_permissions

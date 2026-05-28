@@ -96,10 +96,11 @@ class RefreshToken(models.Model):
     """
     Таблица для отслеживания активных/отозванных refresh-токенов.
     """
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='refresh_token')
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="refresh_token")
     refresh_token = models.CharField(max_length=255, unique=True, db_index=True)
     is_logout = models.BooleanField(default=False)
     expires_at = models.DateTimeField()
 
     class Meta:
-        db_table = 'refresh_tokens'
+        db_table = "refresh_tokens"

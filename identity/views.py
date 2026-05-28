@@ -1,15 +1,14 @@
-from django.shortcuts import render
-from rest_framework import status, generics
+import jwt
+from rest_framework import generics, status
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
-import jwt
 
-from .models import User, RefreshToken, Role, UserRole, Permission, RolePermission
+from .models import Permission, RefreshToken, Role, RolePermission, User, UserRole
 from .permissions import HasPermission
-from .serializers import UserRegisterSerializer, UserProfileSerializer, AdminPermissionSerializer, \
-    AdminRolesListSerializer, AdminUserRolesSerializer, AdminRolePermissionManageSerializer, \
-    AdminUserRoleManageSerializer
+from .serializers import (AdminPermissionSerializer, AdminRolePermissionManageSerializer, AdminRolesListSerializer,
+                          AdminUserRoleManageSerializer, AdminUserRolesSerializer, UserProfileSerializer,
+                          UserRegisterSerializer)
 from .services.hasher import PasswordHasher
 from .services.jwt import JWTService
 
@@ -28,6 +27,7 @@ class UserProfileAPIView(generics.RetrieveUpdateAPIView):
     Endpoint for authenticated users to view and update their personal profile data.
     Automatically handles GET and PUT/PATCH requests using the serializer.
     """
+
     # Используем ваш существующий сериализатор
     serializer_class = UserProfileSerializer
 
@@ -56,10 +56,7 @@ class UserSoftDeleteAPIView(APIView):
         # 2. Force an immediate system-wide logout for this user
         RefreshToken.objects.filter(user=user, is_logout=False).update(is_logout=True)
 
-        return Response(
-            {"message": "Account successfully deleted"},
-            status=status.HTTP_200_OK
-        )
+        return Response({"message": "Account successfully deleted"}, status=status.HTTP_200_OK)
 
 
 class LoginView(APIView):
@@ -98,13 +95,10 @@ class LogoutAPIView(APIView):
     """
 
     def post(self, request):
-        refresh_token = request.data.get('refresh_token')
+        refresh_token = request.data.get("refresh_token")
 
         if not refresh_token:
-            return Response(
-                {"error": "Refresh token is required to logout"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"error": "Refresh token is required to logout"}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             # Get end update Token in db
@@ -113,15 +107,9 @@ class LogoutAPIView(APIView):
                 token_entry.is_logout = True
                 token_entry.save()
 
-            return Response(
-                {"message": "Logged out successfully. Token invalidated"},
-                status=status.HTTP_200_OK
-            )
+            return Response({"message": "Logged out successfully. Token invalidated"}, status=status.HTTP_200_OK)
         except Exception:
-            return Response(
-                {"error": "Invalid token"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"error": "Invalid token"}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class TokenRefreshView(APIView):
@@ -135,10 +123,7 @@ class TokenRefreshView(APIView):
         refresh_token = request.data.get("refresh_token")
 
         if not refresh_token:
-            return Response(
-                {"error": "Refresh token is required"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"error": "Refresh token is required"}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             # 1. Decode and validate the refresh token
@@ -156,8 +141,7 @@ class TokenRefreshView(APIView):
             token_entry = RefreshToken.objects.filter(refresh_token=refresh_token).first()
             if not token_entry or token_entry.is_logout:
                 return Response(
-                    {"error": "This token has been revoked (logged out)"},
-                    status=status.HTTP_401_UNAUTHORIZED
+                    {"error": "This token has been revoked (logged out)"}, status=status.HTTP_401_UNAUTHORIZED
                 )
             else:
                 del token_entry
@@ -172,13 +156,15 @@ class TokenRefreshView(APIView):
     #####  AdminViews  #####
     ########################
 
+
 class AdminPermissionListAPIView(generics.ListAPIView):
     """
     Admin-only endpoint to fetch a list of all system permissions.
     """
+
     queryset = Permission.objects.all()
     serializer_class = AdminPermissionSerializer
-    permission_classes = [HasPermission('edit_rules')]
+    permission_classes = [HasPermission("edit_rules")]
 
 
 class AdminRoleListAPIView(generics.ListAPIView):
@@ -186,12 +172,13 @@ class AdminRoleListAPIView(generics.ListAPIView):
     Admin-only endpoint to fetch all roles along with their bundled permission codes.
     Uses prefetch_related to optimize DB queries (prevents N+1 problem).
     """
+
     serializer_class = AdminRolesListSerializer
-    permission_classes = [HasPermission('edit_rules')]
+    permission_classes = [HasPermission("edit_rules")]
 
     def get_queryset(self):
         # Prefetching permissions linked to roles for optimal database performance
-        return Role.objects.prefetch_related('role_permissions__permission').all()
+        return Role.objects.prefetch_related("role_permissions__permission").all()
 
 
 class AdminUserDetailsAPIView(generics.RetrieveAPIView):
@@ -199,14 +186,13 @@ class AdminUserDetailsAPIView(generics.RetrieveAPIView):
     Admin-only endpoint to retrieve comprehensive role and permission breakdown
     for a specific user by their ID (/api/v1/admin/users/<int:pk>/access/).
     """
+
     serializer_class = AdminUserRolesSerializer
-    permission_classes = [HasPermission('edit_rules')]
+    permission_classes = [HasPermission("edit_rules")]
 
     def get_queryset(self):
         # Deep prefetching across user roles, roles, and their permissions
-        return User.objects.prefetch_related(
-            'user_roles__role__role_permissions__permission'
-        ).all()
+        return User.objects.prefetch_related("user_roles__role__role_permissions__permission").all()
 
 
 class AdminAssignUserRoleAPIView(generics.CreateAPIView):
@@ -214,28 +200,29 @@ class AdminAssignUserRoleAPIView(generics.CreateAPIView):
     Admin-only endpoint to assign a role to a user.
     Uses generic CreateAPIView and handles the logic via the serializer.
     """
+
     serializer_class = AdminUserRoleManageSerializer
-    permission_classes = [HasPermission('edit_rules')]
+    permission_classes = [HasPermission("edit_rules")]
 
 
 class AdminRevokeUserRoleAPIView(APIView):
     """
     Admin-only endpoint to revoke a role from a user.
     """
-    permission_classes = [HasPermission('edit_rules')]
+
+    permission_classes = [HasPermission("edit_rules")]
 
     def post(self, request) -> Response:
         serializer = AdminUserRoleManageSerializer(data=request.data)
         if serializer.is_valid():
-            user = serializer.validated_data['user']
-            role = serializer.validated_data['role']
+            user = serializer.validated_data["user"]
+            role = serializer.validated_data["role"]
 
             # Find and delete the relation
             relation = UserRole.objects.filter(user=user, role=role).first()
             if not relation:
                 return Response(
-                    {"error": f"User does not hold the role '{role.name}'."},
-                    status=status.HTTP_400_BAD_REQUEST
+                    {"error": f"User does not hold the role '{role.name}'."}, status=status.HTTP_400_BAD_REQUEST
                 )
 
             relation.delete()
@@ -248,36 +235,38 @@ class AdminRevokeUserRoleAPIView(APIView):
 # 2. ROLE <-> PERMISSION MANAGEMENT
 # =====================================================================
 
+
 class AdminAddRolePermissionAPIView(generics.CreateAPIView):
     """
     Admin-only endpoint to add an atomic permission code to a role.
     """
+
     serializer_class = AdminRolePermissionManageSerializer
-    permission_classes = [HasPermission('edit_rules')]
+    permission_classes = [HasPermission("edit_rules")]
 
 
 class AdminRemoveRolePermissionAPIView(APIView):
     """
     Admin-only endpoint to remove a permission code from a role.
     """
-    permission_classes = [HasPermission('edit_rules')]
+
+    permission_classes = [HasPermission("edit_rules")]
 
     def post(self, request) -> Response:
         serializer = AdminRolePermissionManageSerializer(data=request.data)
         if serializer.is_valid():
-            role = serializer.validated_data['role']
-            permission = serializer.validated_data['permission']
+            role = serializer.validated_data["role"]
+            permission = serializer.validated_data["permission"]
 
             # Find and delete the relation
             relation = RolePermission.objects.filter(role=role, permission=permission).first()
             if not relation:
                 return Response(
                     {"error": f"Role '{role.name}' does not have permission '{permission.code}'."},
-                    status=status.HTTP_400_BAD_REQUEST
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
 
             relation.delete()
             return Response({"message": "Permission successfully removed from the role."}, status=status.HTTP_200_OK)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
