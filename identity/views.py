@@ -5,8 +5,9 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 import jwt
 
-from .models import User, RefreshToken
-from .serializers import UserRegisterSerializer
+from .models import User, RefreshToken, Role, UserRole
+from .permissions import HasPermission
+from .serializers import UserRegisterSerializer, UserProfileSerializer
 from .services.hasher import PasswordHasher
 from .services.jwt import JWTService
 
@@ -18,6 +19,45 @@ class UserRegisterAPIView(generics.CreateAPIView):
 
     serializer_class = UserRegisterSerializer
     permission_classes = [AllowAny]
+
+
+class UserProfileAPIView(generics.RetrieveUpdateAPIView):
+    """
+    Endpoint for authenticated users to view and update their personal profile data.
+    Automatically handles GET and PUT/PATCH requests using the serializer.
+    """
+    # Используем ваш существующий сериализатор
+    serializer_class = UserProfileSerializer
+
+    def get_object(self) -> User:
+        """
+        Fetch the actual database User record based on the stateless ID from the JWT.
+        """
+        return User.objects.get(id=self.request.user.id)
+
+
+class UserSoftDeleteAPIView(APIView):
+    """
+    Endpoint for account soft-deletion initiated by the user.
+    Deactivates the user profile (is_active=False) and forces a cascade logout
+    by invalidating all their active refresh tokens.
+    """
+
+    def delete(self, request) -> Response:
+        token_user = request.user
+
+        # 1. Fetch the user from PostgreSQL and perform the soft-delete
+        user = User.objects.get(id=token_user.id)
+        user.is_active = False
+        user.save()
+
+        # 2. Force an immediate system-wide logout for this user
+        RefreshToken.objects.filter(user=user, is_logout=False).update(is_logout=True)
+
+        return Response(
+            {"message": "Account successfully deleted"},
+            status=status.HTTP_200_OK
+        )
 
 
 class LoginView(APIView):
