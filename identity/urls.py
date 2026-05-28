@@ -6,7 +6,10 @@ from identity.views import (
     LogoutAPIView,
     UserProfileAPIView,
     UserSoftDeleteAPIView,
-    AdminAssignRoleAPIView
+    AdminPermissionListAPIView,
+    AdminUserDetailsAPIView,
+    AdminRoleListAPIView, AdminAssignUserRoleAPIView, AdminRevokeUserRoleAPIView, AdminAddRolePermissionAPIView,
+    AdminRemoveRolePermissionAPIView
 )
 
 # Явно задаем app_name для изоляции маршрутов приложения
@@ -20,4 +23,15 @@ urlpatterns = [
 
     path('users/profile/', UserProfileAPIView.as_view(), name='user_profile'),
     path('users/deactivate/', UserSoftDeleteAPIView.as_view(), name='user_deactivate'),
+
+    path('admin/permissions/', AdminPermissionListAPIView.as_view(), name='admin_permissions_list'),
+    path('admin/roles/', AdminRoleListAPIView.as_view(), name='admin_roles_list'),
+    path('admin/users/<int:pk>/', AdminUserDetailsAPIView.as_view(), name='admin_user_access'),
+    # Управление ролями пользователя
+    path('admin/users/roles/assign/', AdminAssignUserRoleAPIView.as_view(), name='admin_user_role_assign'),
+    path('admin/users/roles/revoke/', AdminRevokeUserRoleAPIView.as_view(), name='admin_user_role_revoke'),
+    # Управление разрешениями ролей
+    path('admin/roles/permissions/add/', AdminAddRolePermissionAPIView.as_view(), name='admin_role_permission_add'),
+    path('admin/roles/permissions/remove/', AdminRemoveRolePermissionAPIView.as_view(),
+         name='admin_role_permission_remove'),
 ]

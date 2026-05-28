@@ -5,9 +5,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 import jwt
 
-from .models import User, RefreshToken, Role, UserRole
+from .models import User, RefreshToken, Role, UserRole, Permission, RolePermission
 from .permissions import HasPermission
-from .serializers import UserRegisterSerializer, UserProfileSerializer
+from .serializers import UserRegisterSerializer, UserProfileSerializer, AdminPermissionSerializer, \
+    AdminRolesListSerializer, AdminUserRolesSerializer, AdminRolePermissionManageSerializer, \
+    AdminUserRoleManageSerializer
 from .services.hasher import PasswordHasher
 from .services.jwt import JWTService
 
@@ -165,3 +167,117 @@ class TokenRefreshView(APIView):
 
         except jwt.InvalidTokenError as e:
             return Response({"error": str(e)}, status=status.HTTP_401_UNAUTHORIZED)
+
+    ########################
+    #####  AdminViews  #####
+    ########################
+
+class AdminPermissionListAPIView(generics.ListAPIView):
+    """
+    Admin-only endpoint to fetch a list of all system permissions.
+    """
+    queryset = Permission.objects.all()
+    serializer_class = AdminPermissionSerializer
+    permission_classes = [HasPermission('edit_rules')]
+
+
+class AdminRoleListAPIView(generics.ListAPIView):
+    """
+    Admin-only endpoint to fetch all roles along with their bundled permission codes.
+    Uses prefetch_related to optimize DB queries (prevents N+1 problem).
+    """
+    serializer_class = AdminRolesListSerializer
+    permission_classes = [HasPermission('edit_rules')]
+
+    def get_queryset(self):
+        # Prefetching permissions linked to roles for optimal database performance
+        return Role.objects.prefetch_related('role_permissions__permission').all()
+
+
+class AdminUserDetailsAPIView(generics.RetrieveAPIView):
+    """
+    Admin-only endpoint to retrieve comprehensive role and permission breakdown
+    for a specific user by their ID (/api/v1/admin/users/<int:pk>/access/).
+    """
+    serializer_class = AdminUserRolesSerializer
+    permission_classes = [HasPermission('edit_rules')]
+
+    def get_queryset(self):
+        # Deep prefetching across user roles, roles, and their permissions
+        return User.objects.prefetch_related(
+            'user_roles__role__role_permissions__permission'
+        ).all()
+
+
+class AdminAssignUserRoleAPIView(generics.CreateAPIView):
+    """
+    Admin-only endpoint to assign a role to a user.
+    Uses generic CreateAPIView and handles the logic via the serializer.
+    """
+    serializer_class = AdminUserRoleManageSerializer
+    permission_classes = [HasPermission('edit_rules')]
+
+
+class AdminRevokeUserRoleAPIView(APIView):
+    """
+    Admin-only endpoint to revoke a role from a user.
+    """
+    permission_classes = [HasPermission('edit_rules')]
+
+    def post(self, request) -> Response:
+        serializer = AdminUserRoleManageSerializer(data=request.data)
+        if serializer.is_valid():
+            user = serializer.validated_data['user']
+            role = serializer.validated_data['role']
+
+            # Find and delete the relation
+            relation = UserRole.objects.filter(user=user, role=role).first()
+            if not relation:
+                return Response(
+                    {"error": f"User does not hold the role '{role.name}'."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            relation.delete()
+            return Response({"message": "Role successfully revoked from the user."}, status=status.HTTP_200_OK)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+# =====================================================================
+# 2. ROLE <-> PERMISSION MANAGEMENT
+# =====================================================================
+
+class AdminAddRolePermissionAPIView(generics.CreateAPIView):
+    """
+    Admin-only endpoint to add an atomic permission code to a role.
+    """
+    serializer_class = AdminRolePermissionManageSerializer
+    permission_classes = [HasPermission('edit_rules')]
+
+
+class AdminRemoveRolePermissionAPIView(APIView):
+    """
+    Admin-only endpoint to remove a permission code from a role.
+    """
+    permission_classes = [HasPermission('edit_rules')]
+
+    def post(self, request) -> Response:
+        serializer = AdminRolePermissionManageSerializer(data=request.data)
+        if serializer.is_valid():
+            role = serializer.validated_data['role']
+            permission = serializer.validated_data['permission']
+
+            # Find and delete the relation
+            relation = RolePermission.objects.filter(role=role, permission=permission).first()
+            if not relation:
+                return Response(
+                    {"error": f"Role '{role.name}' does not have permission '{permission.code}'."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            relation.delete()
+            return Response({"message": "Permission successfully removed from the role."}, status=status.HTTP_200_OK)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
