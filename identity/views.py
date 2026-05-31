@@ -1,5 +1,5 @@
 import jwt
-from rest_framework import generics, status
+from rest_framework import generics, status, serializers
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -8,9 +8,12 @@ from .models import Permission, RefreshToken, Role, RolePermission, User, UserRo
 from .permissions import HasPermission
 from .serializers import (AdminPermissionSerializer, AdminRolePermissionManageSerializer, AdminRolesListSerializer,
                           AdminUserRoleManageSerializer, AdminUserRolesSerializer, UserProfileSerializer,
-                          UserRegisterSerializer)
+                          UserRegisterSerializer, LoginRequestSerializer, LoginResponseSerializer,
+                          TokenRefreshRequestSerializer, LogoutRequestSerializer)
 from .services.hasher import PasswordHasher
 from .services.jwt import JWTService
+
+from drf_spectacular.utils import extend_schema, inline_serializer
 
 
 class UserRegisterAPIView(generics.CreateAPIView):
@@ -65,7 +68,12 @@ class LoginView(APIView):
     """
 
     permission_classes = [AllowAny]
+    serializer_class = LoginRequestSerializer
 
+    @extend_schema(
+        request=LoginRequestSerializer,
+        responses={200: LoginResponseSerializer}
+    )
     def post(self, request):
         email = request.data.get("email")
         password = request.data.get("password")
@@ -91,25 +99,42 @@ class LoginView(APIView):
 
 class LogoutAPIView(APIView):
     """
-    Log out the user by refresh token
+    Log out the user by refresh token.
     """
 
-    def post(self, request):
-        refresh_token = request.data.get("refresh_token")
+    serializer_class = LogoutRequestSerializer
+
+    @extend_schema(
+        request=LogoutRequestSerializer,
+        responses={200: inline_serializer(
+            name='LogoutSuccessResponse',
+            fields={'message': serializers.CharField()}
+        )}
+    )
+    def post(self, request) -> Response:
+        refresh_token = request.data.get('refresh_token')
 
         if not refresh_token:
-            return Response({"error": "Refresh token is required to logout"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "Refresh token is required to logout"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         try:
-            # Get end update Token in db
             token_entry = RefreshToken.objects.filter(refresh_token=refresh_token).first()
             if token_entry:
                 token_entry.is_logout = True
                 token_entry.save()
 
-            return Response({"message": "Logged out successfully. Token invalidated"}, status=status.HTTP_200_OK)
+            return Response(
+                {"message": "Logged out successfully. Token invalidated"},
+                status=status.HTTP_200_OK
+            )
         except Exception:
-            return Response({"error": "Invalid token"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "Invalid token process"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
 
 class TokenRefreshView(APIView):
@@ -118,7 +143,12 @@ class TokenRefreshView(APIView):
     """
 
     permission_classes = [AllowAny]
+    serializer_class = TokenRefreshRequestSerializer
 
+    @extend_schema(
+        request=TokenRefreshRequestSerializer,
+        responses={200: LoginResponseSerializer}
+    )
     def post(self, request):
         refresh_token = request.data.get("refresh_token")
 
@@ -164,7 +194,7 @@ class AdminPermissionListAPIView(generics.ListAPIView):
 
     queryset = Permission.objects.all()
     serializer_class = AdminPermissionSerializer
-    permission_classes = [HasPermission("edit_rules")]
+    permission_classes = [HasPermission("admin:access")]
 
 
 class AdminRoleListAPIView(generics.ListAPIView):
@@ -174,7 +204,7 @@ class AdminRoleListAPIView(generics.ListAPIView):
     """
 
     serializer_class = AdminRolesListSerializer
-    permission_classes = [HasPermission("edit_rules")]
+    permission_classes = [HasPermission("admin:access")]
 
     def get_queryset(self):
         # Prefetching permissions linked to roles for optimal database performance
@@ -188,7 +218,7 @@ class AdminUserDetailsAPIView(generics.RetrieveAPIView):
     """
 
     serializer_class = AdminUserRolesSerializer
-    permission_classes = [HasPermission("edit_rules")]
+    permission_classes = [HasPermission("admin:access")]
 
     def get_queryset(self):
         # Deep prefetching across user roles, roles, and their permissions
@@ -202,7 +232,7 @@ class AdminAssignUserRoleAPIView(generics.CreateAPIView):
     """
 
     serializer_class = AdminUserRoleManageSerializer
-    permission_classes = [HasPermission("edit_rules")]
+    permission_classes = [HasPermission("admin:access")]
 
 
 class AdminRevokeUserRoleAPIView(APIView):
@@ -210,7 +240,7 @@ class AdminRevokeUserRoleAPIView(APIView):
     Admin-only endpoint to revoke a role from a user.
     """
 
-    permission_classes = [HasPermission("edit_rules")]
+    permission_classes = [HasPermission("admin:access")]
 
     def post(self, request) -> Response:
         serializer = AdminUserRoleManageSerializer(data=request.data)
@@ -242,7 +272,7 @@ class AdminAddRolePermissionAPIView(generics.CreateAPIView):
     """
 
     serializer_class = AdminRolePermissionManageSerializer
-    permission_classes = [HasPermission("edit_rules")]
+    permission_classes = [HasPermission("admin:access")]
 
 
 class AdminRemoveRolePermissionAPIView(APIView):
@@ -250,7 +280,7 @@ class AdminRemoveRolePermissionAPIView(APIView):
     Admin-only endpoint to remove a permission code from a role.
     """
 
-    permission_classes = [HasPermission("edit_rules")]
+    permission_classes = [HasPermission("admin:access")]
 
     def post(self, request) -> Response:
         serializer = AdminRolePermissionManageSerializer(data=request.data)

@@ -98,7 +98,7 @@ class RefreshToken(models.Model):
     """
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="refresh_token")
-    refresh_token = models.CharField(max_length=255, unique=True, db_index=True)
+    refresh_token = models.CharField(max_length=1024, unique=True, db_index=True)
     is_logout = models.BooleanField(default=False)
     expires_at = models.DateTimeField()
 

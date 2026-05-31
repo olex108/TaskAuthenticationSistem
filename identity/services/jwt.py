@@ -41,40 +41,43 @@ class JWTService:
         """
         Method that generates a JWT token (Access and Refresh)
         """
-
         now = datetime.now(timezone.utc)
-
         user_permissions = cls.get_user_permissions(user)
 
+        access_expiry = now + timedelta(minutes=cls.ACCESS_EXP_MINS)
+        refresh_expiry = now + timedelta(days=cls.REFRESH_EXP_DAYS)
+
         access_payload = {
-            "token_type": "access",
-            "user_id": user.id,
-            "email": user.email,
-            "permissions": user_permissions,
-            "exp": now + timedelta(minutes=cls.ACCESS_EXP_MINS),
-            "iat": now,
+            'token_type': 'access',
+            'user_id': user.id,
+            'email': user.email,
+            'permissions': user_permissions,
+            'exp': access_expiry,
+            'iat': now
         }
 
         refresh_payload = {
-            "token_type": "refresh",
-            "user_id": user.id,
-            "email": user.email,
-            "permissions": user_permissions,
-            "exp": now + timedelta(days=cls.REFRESH_EXP_DAYS),
-            "iat": now,
+            'token_type': 'refresh',
+            'user_id': user.id,
+            'email': user.email,
+            'permissions': user_permissions,
+            'exp': refresh_expiry,
+            'iat': now
         }
 
         access_token = jwt.encode(access_payload, cls.SECRET_KEY, algorithm=cls.ALGORITHM)
         refresh_token = jwt.encode(refresh_payload, cls.SECRET_KEY, algorithm=cls.ALGORITHM)
 
-        expires_datetime = datetime.fromtimestamp(refresh_payload["exp"], tz=timezone.utc)
-        JWTService.create_refresh_token_in_db(
-            user=user, refresh_token=refresh_token, expires_at=expires_datetime, is_logout=False
+        cls.create_refresh_token_in_db(
+            user=user,
+            refresh_token=refresh_token,
+            expires_at=refresh_expiry,
+            is_logout=False
         )
 
         return {
-            "access_token": access_token,
-            "refresh_token": refresh_token,
+            'access_token': access_token,
+            'refresh_token': refresh_token,
             "token_type": "bearer",
         }
 

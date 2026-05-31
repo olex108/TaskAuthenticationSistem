@@ -72,6 +72,44 @@ class UserRegisterSerializer(serializers.ModelSerializer):
 
         return super().create(validated_data)
 
+
+class UserProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ["id", "email", "first_name", "middle_name", "last_name"]
+        read_only_fields = ["id", "email"]
+
+
+class LoginRequestSerializer(serializers.Serializer):
+
+    email = serializers.EmailField(help_text="User email")
+    password = serializers.CharField(
+        style={'input_type': 'password'},
+        help_text="Secure password"
+    )
+
+
+class LoginResponseSerializer(serializers.Serializer):
+
+    access_token = serializers.CharField(help_text="JWT access token")
+    refresh_token = serializers.CharField(help_text="refresh token")
+    token_type = serializers.CharField(help_text="Token type 'bearer'")
+
+
+class LogoutRequestSerializer(serializers.Serializer):
+
+    refresh_token = serializers.CharField(
+        help_text="refresh token"
+    )
+
+
+class TokenRefreshRequestSerializer(serializers.Serializer):
+
+    refresh_token = serializers.CharField(
+        help_text="JWT refresh token"
+    )
+
+
     ########################
     ### AdminSerializers ###
     ########################

@@ -8,7 +8,7 @@ from identity.permissions import HasPermission
 class MockAnalyticsAPIView(APIView):
     """
     Mock endpoint for business intelligence and financial reports.
-    Protected by custom RBAC: requires 'mock:view_analytics' permission code.
+    Protected by custom RBAC: requires 'mock:view_analytics' permission.
     """
     permission_classes = [HasPermission('mock:view_analytics')]
 
@@ -26,7 +26,7 @@ class MockAnalyticsAPIView(APIView):
 class MockDataManagementAPIView(APIView):
     """
     Mock endpoint for modifying corporate configuration settings.
-    Protected by custom RBAC: requires 'mock:edit_data' permission code.
+    Protected by custom RBAC: requires 'mock:edit_data' permission.
     """
     permission_classes = [HasPermission('mock:edit_data')]
 
