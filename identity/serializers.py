@@ -1,9 +1,8 @@
 import re
 
 from rest_framework import serializers
-from rest_framework.exceptions import APIException
-from rest_framework import status
-from .models import User
+
+from .models import Permission, Role, RolePermission, User, UserRole
 from .services.hasher import PasswordHasher
 
 
@@ -81,35 +80,172 @@ class UserProfileSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "email"]
 
 
-# class AuthFailedException(APIException):
-#     status_code = status.HTTP_401_UNAUTHORIZED
-#     default_detail = 'Invalid credentials or account is deactivated'
-#     default_code = 'authentication_failed'
+class LoginRequestSerializer(serializers.Serializer):
 
-# class LoginSerializer(serializers.Serializer):
-#     """
-#     Serializer to handle user authentication.
-#     Validates user credentials and mitigates timing attacks using dummy verification.
-#     """
-#
-#     email = serializers.EmailField()
-#     password = serializers.CharField(write_only=True, style={'input_type': 'password'})
-#
-#     def validate(self, attrs):
-#         email = attrs.get('email')
-#         password = attrs.get('password')
-#
-#         if not email or not password:
-#             raise serializers.ValidationError("Email or password are required")
-#
-#         user = User.objects.filter(email=email).first()
-#
-#         if not user or not user.is_active:
-#             PasswordHasher.dummy_verify(password)
-#             raise AuthFailedException()
-#
-#         if not PasswordHasher.verify_password(password, user.password_hash):
-#             raise AuthFailedException()
-#
-#         attrs['user'] = user
-#         return attrs
+    email = serializers.EmailField(help_text="User email")
+    password = serializers.CharField(
+        style={'input_type': 'password'},
+        help_text="Secure password"
+    )
+
+
+class LoginResponseSerializer(serializers.Serializer):
+
+    access_token = serializers.CharField(help_text="JWT access token")
+    refresh_token = serializers.CharField(help_text="refresh token")
+    token_type = serializers.CharField(help_text="Token type 'bearer'")
+
+
+class LogoutRequestSerializer(serializers.Serializer):
+
+    refresh_token = serializers.CharField(
+        help_text="refresh token"
+    )
+
+
+class TokenRefreshRequestSerializer(serializers.Serializer):
+
+    refresh_token = serializers.CharField(
+        help_text="JWT refresh token"
+    )
+
+
+    ########################
+    ### AdminSerializers ###
+    ########################
+
+
+class AdminPermissionSerializer(serializers.ModelSerializer):
+    """
+    Serializer to list all permissions.
+    """
+
+    class Meta:
+        model = Permission
+        fields = ["id", "code", "description"]
+
+
+class AdminRolesListSerializer(serializers.ModelSerializer):
+    """
+    Serializer to list roles along with their linked permission codes.
+    Simplified using SlugRelatedField over the 'role_permissions' relationship.
+    """
+
+    permissions = serializers.SlugRelatedField(
+        many=True, read_only=True, slug_field="permission__code", source="role_permissions"
+    )
+
+    class Meta:
+        model = Role
+        fields = ["id", "name", "permissions"]
+
+
+class AdminRoleDetailOverviewSerializer(serializers.ModelSerializer):
+    """
+    Nested helper serializer to display structured role information inside the User overview.
+    """
+
+    role_name = serializers.CharField(source="role.name")
+    permissions = serializers.SlugRelatedField(
+        many=True, read_only=True, slug_field="permission__code", source="role.role_permissions"
+    )
+
+    class Meta:
+        model = Role
+        fields = ["role_name", "permissions"]
+
+
+class AdminUserRolesSerializer(serializers.ModelSerializer):
+    """
+    Serializer to display user access overview.
+    Completely refactored to eliminate custom MethodFields.
+    """
+
+    roles_overview = AdminRoleDetailOverviewSerializer(many=True, read_only=True, source="user_roles")
+    all_effective_permissions = serializers.SlugRelatedField(
+        many=True, read_only=True, slug_field="role__role_permissions__permission__code", source="user_roles"
+    )
+
+    class Meta:
+        model = User
+        fields = ["id", "email", "roles_overview", "all_effective_permissions"]
+
+
+class AdminUserRoleManageSerializer(serializers.ModelSerializer):
+    """
+    Serializer to manage User <-> Role relationships.
+    Accepts user email and role name to create or validate a connection.
+    """
+
+    email = serializers.EmailField(write_only=True)
+    role_name = serializers.CharField(max_length=50, write_only=True)
+
+    class Meta:
+        model = UserRole
+        fields = ["email", "role_name"]
+
+    def validate(self, attrs):
+        email = attrs.get("email")
+        role_name = attrs.get("role_name")
+
+        # 1. Fetch user and role instances
+        user = User.objects.filter(email=email).first()
+        role = Role.objects.filter(name=role_name).first()
+
+        if not user:
+            raise serializers.ValidationError({"email": "User with this email does not exist."})
+        if not role:
+            raise serializers.ValidationError({"role_name": f"Role '{role_name}' does not exist."})
+
+        # Save instances in attributes for creation/deletion actions
+        attrs["user"] = user
+        attrs["role"] = role
+        return attrs
+
+    def create(self, validated_data):
+        """Creates a relation if it doesn't already exist."""
+        user = validated_data["user"]
+        role = validated_data["role"]
+
+        # Prevent duplicate database records
+        user_role, created = UserRole.objects.get_or_create(user=user, role=role)
+        return user_role
+
+
+class AdminRolePermissionManageSerializer(serializers.ModelSerializer):
+    """
+    Serializer to manage Role <-> Permission relationships.
+    Accepts role name and permission code to create or validate a connection.
+    """
+
+    role_name = serializers.CharField(max_length=50, write_only=True)
+    permission_code = serializers.CharField(max_length=100, write_only=True)
+
+    class Meta:
+        model = RolePermission
+        fields = ["role_name", "permission_code"]
+
+    def validate(self, attrs):
+        role_name = attrs.get("role_name")
+        permission_code = attrs.get("permission_code")
+
+        # 1. Fetch role and permission instances
+        role = Role.objects.filter(name=role_name).first()
+        permission = Permission.objects.filter(code=permission_code).first()
+
+        if not role:
+            raise serializers.ValidationError({"role_name": f"Role '{role_name}' does not exist."})
+        if not permission:
+            raise serializers.ValidationError({"permission_code": f"Permission '{permission_code}' does not exist."})
+
+        attrs["role"] = role
+        attrs["permission"] = permission
+        return attrs
+
+    def create(self, validated_data):
+        """Creates a relation if it doesn't already exist."""
+        role = validated_data["role"]
+        permission = validated_data["permission"]
+
+        role_perm, created = RolePermission.objects.get_or_create(role=role, permission=permission)
+        return role_perm

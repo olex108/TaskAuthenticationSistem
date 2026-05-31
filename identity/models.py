@@ -90,3 +90,17 @@ class RolePermission(models.Model):
         unique_together = ("role", "permission")
         verbose_name = "Разрешение роли"
         verbose_name_plural = "Разрешения ролей"
+
+
+class RefreshToken(models.Model):
+    """
+    Таблица для отслеживания активных/отозванных refresh-токенов.
+    """
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="refresh_token")
+    refresh_token = models.CharField(max_length=1024, unique=True, db_index=True)
+    is_logout = models.BooleanField(default=False)
+    expires_at = models.DateTimeField()
+
+    class Meta:
+        db_table = "refresh_tokens"
